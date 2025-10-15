@@ -33,30 +33,28 @@ sync_item() {
 
     # Prepare destination
     if [ $is_directory -eq 1 ]; then
-        # For directories: ensure destination parent exists
-        # Add trailing slash to source to sync contents
-        [[ "$source_path" != */ ]] && source_path="${source_path}/"
+        # For directories: ensure destination exists and NO trailing slash on source
+        # rsync will copy the directory itself into dest
+        [[ "$source_path" == */ ]] && source_path="${source_path%/}"
+        [[ "$dest_path" != */ ]] && dest_path="${dest_path}/"
         mkdir -p "$dest_path"
     else
         # For files: ensure destination directory exists
-        # Extract the parent directory from dest_path
         local dest_dir
         if [[ "$dest_path" == */ ]]; then
-            # dest_path is a directory, create it
             dest_dir="$dest_path"
-            mkdir -p "$dest_dir"
         else
-            # dest_path might be a full file path, get parent directory
             dest_dir="$(dirname "$dest_path")"
-            mkdir -p "$dest_dir"
-            # If dest_path doesn't end with /, treat it as directory
-            [[ "$dest_path" != */ ]] && dest_path="${dest_path}/"
+            dest_path="${dest_path}/"
         fi
+        mkdir -p "$dest_dir"
     fi
 
     while [ $retry_count -lt $max_retries ]; do
-        # Run rsync with password support
-        if rsync_cmd -avh --progress "$source_user@$source_host:$source_path" "$dest_path"; then
+        # Run rsync with password support and config options
+        # Use RSYNC_OPTIONS from config, fallback to basic options if not set
+        local rsync_opts="${RSYNC_OPTIONS:--avh --progress}"
+        if rsync_cmd $rsync_opts "$source_user@$source_host:$source_path" "$dest_path"; then
             print_success "Successfully synced: $description"
             return 0
         else
