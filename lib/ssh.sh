@@ -49,6 +49,12 @@ test_ssh_connection() {
 
     print_info "Testing SSH connection to $user@$host..."
 
+    # Debug: Show what SSH settings are available
+    echo "DEBUG: SSH Configuration at test time:"
+    echo "  SSH_KEY_PATH='$SSH_KEY_PATH'"
+    echo "  SSH_OPTIONS='$SSH_OPTIONS'"
+    echo "  SSH_PORT='$SSH_PORT'"
+
     # Build SSH command with custom options
     local ssh_test_cmd="ssh"
     local ssh_opts="-o ConnectTimeout=5"
@@ -72,6 +78,9 @@ test_ssh_connection() {
             print_warning "SSH key not found: $SSH_KEY_PATH (ignoring)"
         fi
     fi
+
+    # Debug: Show final SSH command
+    echo "DEBUG: Final SSH command: $ssh_test_cmd $ssh_opts -o BatchMode=yes $user@$host"
 
     # First try without password (key-based auth)
     if $ssh_test_cmd $ssh_opts -o BatchMode=yes "$user@$host" "echo 'Connection successful'" &>/dev/null; then

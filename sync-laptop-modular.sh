@@ -23,7 +23,18 @@ fi
 
 # Source configuration
 if [ -f "$CONFIG_FILE" ]; then
+    echo "DEBUG: Loading config from: $CONFIG_FILE"
     source "$CONFIG_FILE"
+
+    # Export SSH variables so they're available to all functions
+    export SSH_KEY_PATH
+    export SSH_OPTIONS
+    export SSH_PORT
+
+    echo "DEBUG: Config loaded. SSH settings:"
+    echo "  SSH_KEY_PATH='$SSH_KEY_PATH'"
+    echo "  SSH_OPTIONS='$SSH_OPTIONS'"
+    echo "  SSH_PORT='$SSH_PORT'"
 else
     echo "Warning: Config file not found: $CONFIG_FILE"
     echo "Using defaults..."
