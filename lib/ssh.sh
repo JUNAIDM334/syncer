@@ -7,9 +7,11 @@
 # Global variables for connection
 USE_PASSWORD=0
 SSH_PASSWORD=""
-SSH_KEY_PATH=""
-SSH_OPTIONS=""
-SSH_PORT="22"
+
+# SSH configuration variables - only set defaults if not already defined
+: ${SSH_KEY_PATH:=""}
+: ${SSH_OPTIONS:=""}
+: ${SSH_PORT:="22"}
 
 # Function to check if rsync is installed
 check_rsync() {
@@ -57,7 +59,7 @@ test_ssh_connection() {
 
     # Build SSH command with custom options
     local ssh_test_cmd="ssh"
-    local ssh_opts="-o ConnectTimeout=5"
+    local ssh_opts="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
 
     # Add port if specified
     if [ -n "$SSH_PORT" ] && [ "$SSH_PORT" != "22" ]; then
@@ -69,15 +71,8 @@ test_ssh_connection() {
         ssh_opts="$ssh_opts $SSH_OPTIONS"
     fi
 
-    # Add identity file if specified
-    if [ -n "$SSH_KEY_PATH" ]; then
-        if [ -f "$SSH_KEY_PATH" ]; then
-            ssh_opts="$ssh_opts -i $SSH_KEY_PATH"
-            print_info "Using SSH key: $SSH_KEY_PATH"
-        else
-            print_warning "SSH key not found: $SSH_KEY_PATH (ignoring)"
-        fi
-    fi
+    # Don't add -i flag, let SSH use default keys or ssh_config
+    # The IdentitiesOnly=yes option will handle key selection
 
     # Debug: Show final SSH command
     echo "DEBUG: Final SSH command: $ssh_test_cmd $ssh_opts -o BatchMode=yes $user@$host"
@@ -118,7 +113,7 @@ test_ssh_connection() {
 # Function to run SSH command with or without password
 ssh_cmd() {
     # Build SSH options string
-    local ssh_opts=""
+    local ssh_opts="-o StrictHostKeyChecking=accept-new"
 
     # Add port if specified
     if [ -n "$SSH_PORT" ] && [ "$SSH_PORT" != "22" ]; then
@@ -130,10 +125,8 @@ ssh_cmd() {
         ssh_opts="$ssh_opts $SSH_OPTIONS"
     fi
 
-    # Add identity file if specified
-    if [ -n "$SSH_KEY_PATH" ] && [ -f "$SSH_KEY_PATH" ]; then
-        ssh_opts="$ssh_opts -i $SSH_KEY_PATH"
-    fi
+    # Don't add -i flag, let SSH use default keys or ssh_config
+    # The IdentitiesOnly=yes option will handle key selection
 
     if [ "$USE_PASSWORD" -eq 1 ]; then
         sshpass -p "$SSH_PASSWORD" ssh $ssh_opts "$@"
@@ -145,13 +138,11 @@ ssh_cmd() {
 # Function to run rsync with or without password
 rsync_cmd() {
     # Build SSH options for rsync
-    local ssh_opts=""
+    local ssh_opts="ssh -o StrictHostKeyChecking=accept-new"
 
     # Add port if specified
     if [ -n "$SSH_PORT" ] && [ "$SSH_PORT" != "22" ]; then
-        ssh_opts="ssh -p $SSH_PORT"
-    else
-        ssh_opts="ssh"
+        ssh_opts="$ssh_opts -p $SSH_PORT"
     fi
 
     # Add custom SSH options
@@ -159,10 +150,8 @@ rsync_cmd() {
         ssh_opts="$ssh_opts $SSH_OPTIONS"
     fi
 
-    # Add identity file if specified
-    if [ -n "$SSH_KEY_PATH" ] && [ -f "$SSH_KEY_PATH" ]; then
-        ssh_opts="$ssh_opts -i $SSH_KEY_PATH"
-    fi
+    # Don't add -i flag, let SSH use default keys or ssh_config
+    # The IdentitiesOnly=yes option will handle key selection
 
     if [ "$USE_PASSWORD" -eq 1 ]; then
         sshpass -p "$SSH_PASSWORD" rsync -e "$ssh_opts" "$@"

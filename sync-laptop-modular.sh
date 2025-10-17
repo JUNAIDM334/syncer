@@ -11,15 +11,29 @@
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+echo "=========================================="
+echo "  Modular Laptop Sync Script"
+echo "=========================================="
+echo ""
+echo "DEBUG: Script started with arguments: $@"
+echo "DEBUG: \$1='$1', \$2='$2'"
+echo ""
+
 # Load configuration
 CONFIG_FILE="$SCRIPT_DIR/config/defaults.conf"
 if [ "$1" = "--config" ] && [ -n "$2" ]; then
+    echo "DEBUG: Detected --config flag"
     CONFIG_FILE="$2"
     shift 2
 elif [ "$1" = "--profile" ] && [ -n "$2" ]; then
+    echo "DEBUG: Detected --profile flag with name: $2"
     CONFIG_FILE="$SCRIPT_DIR/config/sync-profiles/$2.conf"
+    echo "DEBUG: Will load config from: $CONFIG_FILE"
     shift 2
+else
+    echo "DEBUG: No profile specified, using defaults"
 fi
+echo ""
 
 # Source configuration
 if [ -f "$CONFIG_FILE" ]; then
@@ -36,8 +50,25 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "  SSH_OPTIONS='$SSH_OPTIONS'"
     echo "  SSH_PORT='$SSH_PORT'"
 else
-    echo "Warning: Config file not found: $CONFIG_FILE"
-    echo "Using defaults..."
+    echo ""
+    echo "=========================================="
+    echo "  ERROR: Config file not found!"
+    echo "=========================================="
+    echo ""
+    echo "Looking for: $CONFIG_FILE"
+    echo ""
+    echo "Available profiles:"
+    ls -1 "$SCRIPT_DIR/config/sync-profiles/" 2>/dev/null | sed 's/\.conf$//' | sed 's/^/  - /'
+    echo ""
+    echo "Usage:"
+    echo "  ./sync-laptop-modular.sh --profile PROFILE_NAME"
+    echo ""
+    echo "Examples:"
+    echo "  ./sync-laptop-modular.sh --profile developer"
+    echo "  ./sync-laptop-modular.sh --profile identities-only"
+    echo "  ./sync-laptop-modular.sh --profile minimal"
+    echo ""
+    exit 1
 fi
 
 # Load library modules
@@ -458,11 +489,8 @@ execute_installations() {
 
 # Main function
 main() {
-    clear
-    echo "=========================================="
-    echo "  Modular Laptop Sync Script"
-    echo "=========================================="
-    echo ""
+    # Don't clear - we want to see the debug output above!
+    # clear
 
     # Check prerequisites
     check_rsync
