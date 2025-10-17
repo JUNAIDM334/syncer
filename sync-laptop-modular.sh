@@ -397,6 +397,9 @@ execute_sync() {
 
     for item in "${SYNC_ITEMS[@]}"; do
         IFS='|' read -r source dest desc <<< "$item"
+        echo "DEBUG: Parsing SYNC_ITEM: '$item'"
+        echo "DEBUG: Parsed - source='$source', dest='$dest', desc='$desc'"
+        echo "DEBUG: Global - SOURCE_USER='$SOURCE_USER', SOURCE_HOST='$SOURCE_HOST'"
         if sync_item "$SOURCE_USER" "$SOURCE_HOST" "$source" "$dest" "$desc"; then
             ((success_count++))
         else

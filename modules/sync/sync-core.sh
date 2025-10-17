@@ -18,16 +18,25 @@ sync_item() {
     print_info "From: $source_user@$source_host:$source_path"
     print_info "To: $dest_path"
 
+    # Debug: Show what we're checking
+    echo "DEBUG: Checking if path exists on remote..."
+    echo "DEBUG: source_user='$source_user'"
+    echo "DEBUG: source_host='$source_host'"
+    echo "DEBUG: source_path='$source_path'"
+
     # Check if source is a file or directory
     local is_directory=0
-    if ssh_cmd "$source_user@$source_host" "test -d '$source_path'" 2>/dev/null; then
+    if ssh_cmd "$source_user@$source_host" "test -d \"$source_path\"" 2>/dev/null; then
         is_directory=1
         print_info "Detected as: directory"
-    elif ssh_cmd "$source_user@$source_host" "test -f '$source_path'" 2>/dev/null; then
+    elif ssh_cmd "$source_user@$source_host" "test -f \"$source_path\"" 2>/dev/null; then
         is_directory=0
         print_info "Detected as: file"
     else
         print_error "Source path does not exist or is not accessible: $source_path"
+        echo "DEBUG: Tried to access but failed. Running 'ls -la' on parent directory..."
+        local parent_dir=$(dirname "$source_path")
+        ssh_cmd "$source_user@$source_host" "ls -la \"$parent_dir\"" 2>&1 | head -20
         return 1
     fi
 
