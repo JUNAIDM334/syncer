@@ -91,19 +91,76 @@ get_install_command() {
             echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
             ;;
 
-        # Other Applications
+        # Media Applications
         vlc)
             echo "sudo apt update && sudo apt install -y vlc"
             ;;
+        stremio)
+            if [ "$type" = "snap" ]; then
+                echo "sudo snap install stremio"
+            else
+                echo "echo 'Stremio requires snap or manual download from https://www.stremio.com/downloads' && exit 1"
+            fi
+            ;;
+
+        # Communication Applications
+        slack)
+            if [ "$type" = "snap" ]; then
+                echo "sudo snap install slack --classic"
+            else
+                echo "wget https://downloads.slack-edge.com/releases/linux/4.36.140/prod/x64/slack-desktop-4.36.140-amd64.deb -O /tmp/slack.deb && \
+                      sudo dpkg -i /tmp/slack.deb || sudo apt-get install -f -y && \
+                      rm -f /tmp/slack.deb"
+            fi
+            ;;
+        discord)
+            if [ "$type" = "snap" ]; then
+                echo "sudo snap install discord"
+            else
+                echo "wget 'https://discord.com/api/download?platform=linux&format=deb' -O /tmp/discord.deb && \
+                      sudo dpkg -i /tmp/discord.deb || sudo apt-get install -f -y && \
+                      rm -f /tmp/discord.deb"
+            fi
+            ;;
+        skype)
+            if [ "$type" = "snap" ]; then
+                echo "sudo snap install skype --classic"
+            else
+                echo "wget https://go.skype.com/skypeforlinux-64.deb -O /tmp/skype.deb && \
+                      sudo dpkg -i /tmp/skype.deb || sudo apt-get install -f -y && \
+                      rm -f /tmp/skype.deb"
+            fi
+            ;;
+
+        # Graphics Applications
         gimp)
             echo "sudo apt update && sudo apt install -y gimp"
             ;;
         inkscape)
             echo "sudo apt update && sudo apt install -y inkscape"
             ;;
+
+        # API Testing Tools
+        postman)
+            echo "sudo snap install postman"
+            ;;
+        insomnia)
+            echo "sudo snap install insomnia"
+            ;;
+
+        # Office Suite
         libreoffice)
             echo "sudo apt update && sudo apt install -y libreoffice"
             ;;
+
+        # Torrent Clients
+        qbittorrent)
+            echo "sudo apt update && sudo apt install -y qbittorrent"
+            ;;
+        transmission)
+            echo "sudo apt update && sudo apt install -y transmission-gtk"
+            ;;
+
         *)
             echo ""  # Return empty for unknown apps
             ;;

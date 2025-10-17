@@ -31,6 +31,7 @@ fi
 
 # Load library modules
 source "$SCRIPT_DIR/lib/utils.sh" || { echo "Failed to load utils.sh"; exit 1; }
+source "$SCRIPT_DIR/lib/ui-base.sh" || { echo "Failed to load ui-base.sh"; exit 1; }
 source "$SCRIPT_DIR/lib/ssh.sh" || { echo "Failed to load ssh.sh"; exit 1; }
 
 # Load discovery modules
@@ -38,6 +39,7 @@ source "$SCRIPT_DIR/modules/discovery/browsers.sh" || { echo "Failed to load bro
 source "$SCRIPT_DIR/modules/discovery/databases.sh" || { echo "Failed to load databases.sh"; exit 1; }
 source "$SCRIPT_DIR/modules/discovery/dev-tools.sh" || { echo "Failed to load dev-tools.sh"; exit 1; }
 source "$SCRIPT_DIR/modules/discovery/files.sh" || { echo "Failed to load files.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/discovery/applications.sh" || { echo "Failed to load applications.sh"; exit 1; }
 
 # Load sync modules
 source "$SCRIPT_DIR/modules/sync/sync-core.sh" || { echo "Failed to load sync-core.sh"; exit 1; }
@@ -75,6 +77,7 @@ DEST_HOME="$HOME"
 declare -A BROWSERS
 declare -A DB_CLIENTS
 declare -A DEV_TOOLS
+declare -A OTHER_APPS
 DISCOVERED_DIRS=""
 DISCOVERED_HIDDEN=""
 
@@ -124,6 +127,13 @@ run_discovery() {
         echo ""
     else
         print_info "Dev tools discovery disabled in profile"
+    fi
+
+    if [ "$DISCOVER_APPLICATIONS" != "false" ]; then
+        discover_applications "$SOURCE_USER" "$SOURCE_HOST" "$SOURCE_HOME"
+        echo ""
+    else
+        print_info "Applications discovery disabled in profile"
     fi
 
     if [ "$DISCOVER_FILES" = "true" ]; then
@@ -262,6 +272,35 @@ select_browsers() {
             SYNC_ITEMS+=("$path|$dest_path|$browser profile ($type)")
         fi
         echo ""
+    done
+}
+
+# Interactive selection for applications
+select_applications() {
+    if [ ${#OTHER_APPS[@]} -eq 0 ]; then
+        return
+    fi
+
+    echo ""
+    print_info "=== Other Applications Installation ==="
+    echo ""
+
+    for app in "${!OTHER_APPS[@]}"; do
+        IFS='|' read -r status type <<< "${OTHER_APPS[$app]}"
+
+        if [ "$status" = "installed" ]; then
+            print_info "Found: $app ($type)"
+
+            # Check if installed locally
+            if ! is_application_installed "$app"; then
+                print_warning "$app is not installed on this laptop"
+                if ask_yes_no "Install $app on this laptop?"; then
+                    APPS_TO_INSTALL+=("$app|$type")
+                fi
+            else
+                print_success "$app is already installed"
+            fi
+        fi
     done
 }
 
@@ -426,6 +465,7 @@ main() {
     # Interactive selection
     select_config_files
     select_browsers
+    select_applications
 
     # Directory selection
     if [ -n "$DISCOVERED_DIRS" ]; then

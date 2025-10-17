@@ -63,6 +63,18 @@ verify_installation() {
         ruby) command -v ruby &>/dev/null ;;
         golang) command -v go &>/dev/null ;;
         rust) command -v rustc &>/dev/null ;;
+        vlc) command -v vlc &>/dev/null ;;
+        stremio) command -v stremio &>/dev/null || snap list 2>/dev/null | grep -q '^stremio ' ;;
+        slack) command -v slack &>/dev/null || snap list 2>/dev/null | grep -q '^slack ' ;;
+        discord) command -v discord &>/dev/null || snap list 2>/dev/null | grep -q '^discord ' ;;
+        skype) command -v skypeforlinux &>/dev/null || snap list 2>/dev/null | grep -q '^skype ' ;;
+        gimp) command -v gimp &>/dev/null ;;
+        inkscape) command -v inkscape &>/dev/null ;;
+        postman) snap list 2>/dev/null | grep -q '^postman ' ;;
+        insomnia) snap list 2>/dev/null | grep -q '^insomnia ' ;;
+        libreoffice) command -v libreoffice &>/dev/null ;;
+        qbittorrent) command -v qbittorrent &>/dev/null ;;
+        transmission) command -v transmission-gtk &>/dev/null ;;
         *)
             print_warning "No verification method for: $app"
             return 1

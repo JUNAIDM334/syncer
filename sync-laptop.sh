@@ -7,14 +7,8 @@
 #   ./sync-laptop.sh          # Normal mode with GUI dialogs
 #   ./sync-laptop.sh --no-gui # Terminal-only mode (no dialogs)
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# No signal handlers - keep it simple, allow normal Ctrl+C behavior
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Check for --no-gui flag
 NO_GUI=0
@@ -22,6 +16,25 @@ if [ "$1" = "--no-gui" ] || [ "$1" = "-n" ] || [ "$1" = "--terminal" ]; then
     NO_GUI=1
     echo "Running in terminal-only mode (no GUI dialogs)"
 fi
+
+# Load library modules
+source "$SCRIPT_DIR/lib/utils.sh" || { echo "Failed to load utils.sh"; exit 1; }
+source "$SCRIPT_DIR/lib/ui-menu.sh" || { echo "Failed to load ui-menu.sh"; exit 1; }
+source "$SCRIPT_DIR/lib/ssh.sh" || { echo "Failed to load ssh.sh"; exit 1; }
+
+# Load discovery modules
+source "$SCRIPT_DIR/modules/discovery/browsers.sh" || { echo "Failed to load browsers.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/discovery/databases.sh" || { echo "Failed to load databases.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/discovery/dev-tools.sh" || { echo "Failed to load dev-tools.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/discovery/files.sh" || { echo "Failed to load files.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/discovery/applications.sh" || { echo "Failed to load applications.sh"; exit 1; }
+
+# Load sync modules
+source "$SCRIPT_DIR/modules/sync/sync-core.sh" || { echo "Failed to load sync-core.sh"; exit 1; }
+
+# Load installation module
+source "$SCRIPT_DIR/modules/install/app-registry.sh" || { echo "Failed to load app-registry.sh"; exit 1; }
+source "$SCRIPT_DIR/modules/install/installer.sh" || { echo "Failed to load installer.sh"; exit 1; }
 
 # Global variables for connection
 SOURCE_USER=""
@@ -47,252 +60,19 @@ declare -a SELECTED_DB_BACKUPS
 # Discovery completed flag
 DISCOVERY_DONE=0
 
-# Check which dialog tool is available (only if not in no-gui mode)
-if [ $NO_GUI -eq 1 ]; then
-    DIALOG="none"
-elif command -v whiptail &> /dev/null; then
-    DIALOG="whiptail"
-elif command -v dialog &> /dev/null; then
-    DIALOG="dialog"
-else
-    DIALOG="none"
-fi
+# Note: UI functions (show_msgbox, ask_yes_no, show_menu, show_checklist) are now in lib/ui-menu.sh
+# Note: print_* functions are now in lib/utils.sh
+# Note: SSH functions (ssh_cmd, rsync_cmd, test_ssh_connection, check_rsync, check_sshpass) are now in lib/ssh.sh
 
-# Function to print colored output
-print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Function to show message box
-show_msgbox() {
-    local title="$1"
-    local message="$2"
-
-    if [ "$DIALOG" = "whiptail" ]; then
-        whiptail --title "$title" --msgbox "$message" 20 70
-    elif [ "$DIALOG" = "dialog" ]; then
-        dialog --title "$title" --msgbox "$message" 20 70
-        clear
-    else
-        echo ""
-        echo "=========================================="
-        echo "  $title"
-        echo "=========================================="
-        echo "$message"
-        echo ""
-        read -p "Press Enter to continue..."
-    fi
-}
-
-# Function to ask yes/no question
-ask_yes_no() {
-    local prompt="$1"
-
-    if [ "$DIALOG" = "whiptail" ]; then
-        whiptail --title "Confirm" --yesno "$prompt" 10 60
-        return $?
-    elif [ "$DIALOG" = "dialog" ]; then
-        dialog --title "Confirm" --yesno "$prompt" 10 60
-        local result=$?
-        clear
-        return $result
-    else
-        local response
-        while true; do
-            read -p "$(echo -e ${BLUE}[?]${NC} $prompt [y/n]: )" response
-            case "$response" in
-                [Yy]* ) return 0;;
-                [Nn]* ) return 1;;
-                * ) echo "Please answer y or n.";;
-            esac
-        done
-    fi
-}
-
-# Function to show menu
-show_menu() {
-    local title="$1"
-    shift
-    local options=("$@")
-
-    if [ "$DIALOG" = "whiptail" ]; then
-        whiptail --title "$title" --menu "Choose an option:" 25 80 15 "${options[@]}" 3>&1 1>&2 2>&3
-    elif [ "$DIALOG" = "dialog" ]; then
-        dialog --title "$title" --menu "Choose an option:" 25 80 15 "${options[@]}" 2>&1 >/dev/tty
-        clear
-    else
-        # Fallback to simple menu
-        echo ""
-        echo "=========================================="
-        echo "  $title"
-        echo "=========================================="
-        local i=0
-        while [ $i -lt ${#options[@]} ]; do
-            echo "${options[$i]}. ${options[$((i+1))]}"
-            i=$((i+2))
-        done
-        echo ""
-        read -p "Select option: " choice
-        echo "$choice"
-    fi
-}
-
-# Function to show checklist
-show_checklist() {
-    local title="$1"
-    local prompt="$2"
-    shift 2
-    local options=("$@")
-
-    if [ "$DIALOG" = "whiptail" ]; then
-        whiptail --title "$title" --checklist "$prompt" 25 80 15 "${options[@]}" 3>&1 1>&2 2>&3
-    elif [ "$DIALOG" = "dialog" ]; then
-        dialog --title "$title" --checklist "$prompt" 25 80 15 "${options[@]}" 2>&1 >/dev/tty
-        clear
-    else
-        # Fallback to simple selection
-        echo ""
-        echo "=========================================="
-        echo "  $title"
-        echo "=========================================="
-        echo "$prompt"
-        echo ""
-
-        local i=0
-        declare -a selected_items
-        while [ $i -lt ${#options[@]} ]; do
-            local key="${options[$i]}"
-            local desc="${options[$((i+1))]}"
-            local status="${options[$((i+2))]}"
-
-            echo "$key. $desc"
-            if ask_yes_no "Select '$desc'?"; then
-                selected_items+=("\"$key\"")
-            fi
-            i=$((i+3))
-        done
-
-        echo "${selected_items[@]}"
-    fi
-}
-
-# Function to check if rsync is installed
-check_rsync() {
-    if ! command -v rsync &> /dev/null; then
-        show_msgbox "Error" "rsync is not installed. Please install it first:\n\nsudo apt install rsync"
-        exit 1
-    fi
-}
-
-# Function to check if sshpass is installed
-check_sshpass() {
-    if ! command -v sshpass &> /dev/null; then
-        print_warning "sshpass is not installed. Installing it now for one-time password authentication..."
-        if sudo apt update && sudo apt install -y sshpass; then
-            print_success "sshpass installed successfully"
-            return 0
-        else
-            print_error "Failed to install sshpass. You will need to enter password for each operation."
-            if ask_yes_no "Continue without sshpass (you'll be prompted for password multiple times)?"; then
-                return 1
-            else
-                print_error "Exiting script"
-                exit 1
-            fi
-        fi
-    else
-        print_success "sshpass is already installed"
-    fi
-    return 0
-}
-
-# Function to run SSH command with or without password
-ssh_cmd() {
-    if [ "$USE_PASSWORD" -eq 1 ]; then
-        sshpass -p "$SSH_PASSWORD" ssh "$@"
-    else
-        ssh "$@"
-    fi
-}
-
-# Function to run rsync with or without password
-rsync_cmd() {
-    if [ "$USE_PASSWORD" -eq 1 ]; then
-        sshpass -p "$SSH_PASSWORD" rsync "$@"
-    else
-        rsync "$@"
-    fi
-}
-
-# Function to test SSH connection
-test_ssh_connection() {
-    local user="$1"
-    local host="$2"
-
-    print_info "Testing SSH connection to $user@$host..."
-
-    # First try without password (key-based auth)
-    if ssh -o ConnectTimeout=5 -o BatchMode=yes "$user@$host" "echo 'Connection successful'" &>/dev/null; then
-        print_success "SSH key authentication successful"
-        USE_PASSWORD=0
-        return 0
-    else
-        print_warning "SSH key authentication not available"
-
-        # Check if sshpass is available
-        if command -v sshpass &> /dev/null; then
-            print_info "Password will be requested once for all operations"
-            read -sp "Enter SSH password for $user@$host: " SSH_PASSWORD
-            echo ""
-
-            # Test password
-            if sshpass -p "$SSH_PASSWORD" ssh -o ConnectTimeout=5 "$user@$host" "echo 'Connection successful'" &>/dev/null; then
-                print_success "Password authentication successful"
-                USE_PASSWORD=1
-                export SSH_PASSWORD
-                return 0
-            else
-                print_error "Password authentication failed"
-                return 1
-            fi
-        else
-            print_warning "You will need to enter password for each operation"
-            print_info "Tip: Install sshpass or set up SSH key authentication"
-            USE_PASSWORD=0
-            return 1
-        fi
-    fi
-}
-
-# Function to setup connection
+# Function to setup connection (menu-based version with whiptail support)
 setup_connection() {
     if [ -n "$SOURCE_USER" ] && [ -n "$SOURCE_HOST" ]; then
         return 0
     fi
 
-    if [ "$DIALOG" != "none" ]; then
-        SOURCE_USER=$(whiptail --title "Source Laptop" --inputbox "Enter source username:" 10 60 3>&1 1>&2 2>&3)
-        SOURCE_HOST=$(whiptail --title "Source Laptop" --inputbox "Enter source IP address:" 10 60 3>&1 1>&2 2>&3)
-        SOURCE_HOME=$(whiptail --title "Source Laptop" --inputbox "Enter source home directory:" 10 60 "/home/$SOURCE_USER" 3>&1 1>&2 2>&3)
-    else
-        echo ""
-        print_info "Please provide the source laptop details:"
-        read -p "Source username: " SOURCE_USER
-        read -p "Source IP address: " SOURCE_HOST
-        read -p "Source home directory [/home/$SOURCE_USER]: " SOURCE_HOME
-    fi
+    SOURCE_USER=$(show_inputbox "Source Laptop" "Enter source username:" "")
+    SOURCE_HOST=$(show_inputbox "Source Laptop" "Enter source IP address:" "")
+    SOURCE_HOME=$(show_inputbox "Source Laptop" "Enter source home directory:" "/home/$SOURCE_USER")
 
     SOURCE_HOME=${SOURCE_HOME:-/home/$SOURCE_USER}
 
